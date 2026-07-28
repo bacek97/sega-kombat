@@ -20,6 +20,10 @@
   .ok{color:#4ade80} .bad{color:#f87171}
   #chooseBtn{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;
              border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  .panel a{color:#7dd3fc}
+  body.dragover::after{content:'Отпустите файл, чтобы запустить игру';position:fixed;inset:0;
+    display:flex;align-items:center;justify-content:center;background:rgba(13,15,20,.85);
+    border:3px dashed #3b82f6;border-radius:16px;font-size:20px;color:#7dd3fc;z-index:99;pointer-events:none}
   #fileInput{display:none}
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
             overflow:hidden;border:1px solid #262b36;display:none}
@@ -52,9 +56,6 @@ import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
 
 const APP_ID = 'sega-md-p2p-v1';
 const ROM_URL = 'https://www.emu-land.net/consoles/genesis/roms?act=getmfl&id=23905&fid=7849';
-const PROXIES = [u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-                 u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
-                 u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)];
 const $ = id => document.getElementById(id);
 
 // ── Ввод от геймпадов → эмулятор ────────────────────────────────────────────
@@ -130,18 +131,9 @@ class MonitorUI {
       if (fps != null) $('fps').textContent = Math.round(fps);
     }, 1000);
   }
-  async autoLoadRom() {
-    for (const wrap of PROXIES) {
-      const url = wrap(ROM_URL);
-      try {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        const buf = await r.arrayBuffer();
-        if (buf.byteLength < 1024) throw new Error('too small');
-        return this.startEmulator(URL.createObjectURL(new Blob([buf])), 'Auto ROM');
-      } catch (e) { console.warn('[rom] прокси не сработал:', url, e); }
-    }
-    $('rom').textContent = 'Ошибка — выберите файл';
+  showRomHint() {
+    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener">Скачать ROM</a><br>
+      <span style="font-size:12px;color:#7a8296">перетащите файл на страницу или нажмите кнопку ниже</span>`;
   }
 }
 
@@ -153,13 +145,23 @@ if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
 
 ui.showQr(roomId);
 new GameHost(roomId, ui);
-ui.autoLoadRom();
+ui.showRomHint();
 
 $('chooseBtn').onclick = () => $('fileInput').click();
 $('fileInput').onchange = e => {
   const f = e.target.files[0];
   if (f) ui.startEmulator(URL.createObjectURL(f), f.name);
 };
+
+// ── Drag & drop ROM на страницу ──────────────────────────────────────────────
+window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragover'); });
+window.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragover'); });
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  document.body.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) ui.startEmulator(URL.createObjectURL(f), f.name);
+});
 </script>
 </body>
 </html>
