@@ -1,0 +1,214 @@
+<!-- WTFPL Kimi K3 -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sega Genesis — Gamepad</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#e6e8ee;
+    font-family:-apple-system,Segoe UI,Roboto,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none}
+  #topbar{position:fixed;top:0;left:0;right:0;height:44px;z-index:50;display:flex;align-items:center;
+    justify-content:space-between;padding:0 12px;background:rgba(10,12,18,.85);border-bottom:1px solid #1c2029}
+  #status{font-size:12px;color:#9aa3b5;display:flex;gap:10px}
+  .ok{color:#4ade80} .bad{color:#f87171}
+  #modeBtn{background:#2563eb;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600}
+  #modeBtn.editing{background:#f59e0b}
+  #layer{position:fixed;inset:0;z-index:10}
+  .ctrl{position:absolute;touch-action:none;-webkit-user-select:none;user-select:none}
+  .ctrl svg{width:100%;height:100%;display:block}
+  .ctrl.editing-outline{outline:2px dashed rgba(255,255,255,.5);outline-offset:4px;border-radius:16px}
+  .ctrl.active svg circle,.ctrl.active svg rect{fill-opacity:.55!important}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div id="status"><span id="conn" class="bad">Connecting…</span><span id="player"></span></div>
+  <button id="modeBtn">Edit</button>
+</div>
+<div id="layer"></div>
+
+<script type="module">
+import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
+
+const APP_ID = 'sega-md-p2p-v1';
+const BUTTONS = ['A','B','C','X','Y','Z','START','MODE'];
+const COLORS = {A:'#f87171',B:'#fbbf24',C:'#4ade80',X:'#60a5fa',Y:'#a78bfa',Z:'#f472b6',START:'#94a3b8',MODE:'#94a3b8'};
+const DEFAULT_LAYOUT = {dpad:{x:4,y:50},A:{x:78,y:58},B:{x:87,y:44},C:{x:94,y:28},
+                        X:{x:58,y:36},Y:{x:67,y:20},Z:{x:76,y:6},START:{x:46,y:4},MODE:{x:30,y:4}};
+const $ = id => document.getElementById(id);
+
+// ── P2P-клиент: подключается к комнате монитора, шлёт ввод ─────────────────
+class PadClient {
+  constructor(roomId) {
+    this.player = 0;
+    const room = joinRoom({appId: APP_ID}, roomId);
+    [this.send] = room.makeAction('input');
+    const [, getAssign] = room.makeAction('assign');
+    getAssign(d => {
+      this.player = d.player;
+      $('player').textContent = 'Player ' + d.player;
+      $('conn').textContent = 'Connected';
+      $('conn').className = 'ok';
+    });
+    room.onPeerJoin(() => { $('conn').textContent = 'Connected'; $('conn').className = 'ok'; });
+    room.onPeerLeave(() => {
+      this.player = 0;
+      $('conn').textContent = 'Disconnected';
+      $('conn').className = 'bad';
+      $('player').textContent = '';
+    });
+  }
+  emit(obj) { if (this.player) this.send(obj); }
+}
+
+// ── SVG-фабрики ─────────────────────────────────────────────────────────────
+const svgBtn = (label, color) =>
+  `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${color}" fill-opacity="0.35"
+   stroke="${color}" stroke-width="3"/><text x="50" y="59" text-anchor="middle" font-size="30"
+   font-weight="700" fill="#fff">${label}</text></svg>`;
+const svgDpad = () =>
+  `<svg viewBox="0 0 100 100"><g fill="#e6e8ee" fill-opacity="0.28" stroke="#e6e8ee"
+   stroke-opacity="0.5" stroke-width="2"><rect x="36" y="4" width="28" height="92" rx="8"/>
+   <rect x="4" y="36" width="92" height="28" rx="8"/></g>
+   <circle cx="50" cy="50" r="14" fill="#e6e8ee" fill-opacity="0.4"/></svg>`;
+
+// ── Раскладка (сохраняется в localStorage) ─────────────────────────────────
+class Layout {
+  static KEY = 'genesis_gamepad_layout_v1';
+  static load() {
+    try { return {...DEFAULT_LAYOUT, ...JSON.parse(localStorage.getItem(Layout.KEY) || '{}')}; }
+    catch { return {...DEFAULT_LAYOUT}; }
+  }
+  static save(id, x, y) {
+    const l = Layout.load();
+    l[id] = {x, y};
+    localStorage.setItem(Layout.KEY, JSON.stringify(l));
+  }
+}
+
+// ── Один элемент управления (кнопка или dpad) ──────────────────────────────
+class Control {
+  constructor(id, html, size, client) {
+    this.id = id;
+    this.client = client;
+    this.el = document.createElement('div');
+    this.el.className = 'ctrl';
+    this.el.style.width = this.el.style.height = size + 'px';
+    this.el.innerHTML = html;
+    $('layer').appendChild(this.el);
+    this.editing = false;
+    this.attachDrag();
+  }
+  place() {
+    const p = Layout.load()[this.id] || DEFAULT_LAYOUT[this.id];
+    this.el.style.left = p.x + '%';
+    this.el.style.top = p.y + '%';
+  }
+  setEditing(on) {
+    this.editing = on;
+    this.el.classList.toggle('editing-outline', on);
+  }
+  attachDrag() {
+    let pid = null, ox = 0, oy = 0;
+    this.el.addEventListener('pointerdown', e => {
+      if (!this.editing) return;
+      pid = e.pointerId;
+      this.el.setPointerCapture(pid);
+      const r = this.el.getBoundingClientRect();
+      ox = e.clientX - r.left; oy = e.clientY - r.top;
+      e.stopPropagation();
+    });
+    this.el.addEventListener('pointermove', e => {
+      if (pid === null || e.pointerId !== pid) return;
+      const lr = $('layer').getBoundingClientRect();
+      const nx = Math.max(0, Math.min(lr.width - this.el.offsetWidth, e.clientX - lr.left - ox));
+      const ny = Math.max(0, Math.min(lr.height - this.el.offsetHeight, e.clientY - lr.top - oy));
+      this.el.style.left = nx / lr.width * 100 + '%';
+      this.el.style.top = ny / lr.height * 100 + '%';
+    });
+    const end = e => {
+      if (pid === null || e.pointerId !== pid) return;
+      pid = null;
+      Layout.save(this.id, parseFloat(this.el.style.left), parseFloat(this.el.style.top));
+    };
+    this.el.addEventListener('pointerup', end);
+    this.el.addEventListener('pointercancel', end);
+  }
+}
+
+class Button extends Control {
+  constructor(name, client) {
+    const small = name === 'START' || name === 'MODE';
+    super(name, svgBtn(name[0], COLORS[name]), small ? 58 : 78, client);
+    this.el.addEventListener('pointerdown', e => {
+      if (this.editing) return;
+      this.el.setPointerCapture(e.pointerId);
+      this.el.classList.add('active');
+      client.emit({type: 'button', button: name, pressed: true});
+    });
+    const release = () => {
+      if (this.editing) return;
+      this.el.classList.remove('active');
+      client.emit({type: 'button', button: name, pressed: false});
+    };
+    this.el.addEventListener('pointerup', release);
+    this.el.addEventListener('pointercancel', release);
+  }
+}
+
+class Dpad extends Control {
+  constructor(client) {
+    super('dpad', svgDpad(), 170, client);
+    this.last = {x: 0, y: 0};
+    this.pid = null;
+    const update = e => {
+      const r = this.el.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      const dead = r.width * 0.18;
+      const x = Math.abs(dx) > dead ? Math.sign(dx) : 0;
+      const y = Math.abs(dy) > dead ? Math.sign(dy) : 0;
+      if (x !== this.last.x || y !== this.last.y) {
+        this.last = {x, y};
+        client.emit({type: 'dpad', x, y});
+      }
+    };
+    this.el.addEventListener('pointerdown', e => {
+      if (this.editing) return;
+      this.pid = e.pointerId;
+      this.el.setPointerCapture(this.pid);
+      update(e);
+    });
+    this.el.addEventListener('pointermove', e => {
+      if (!this.editing && e.pointerId === this.pid) update(e);
+    });
+    const end = e => {
+      if (e.pointerId !== this.pid) return;
+      this.pid = null;
+      this.last = {x: 0, y: 0};
+      client.emit({type: 'dpad', x: 0, y: 0});
+    };
+    this.el.addEventListener('pointerup', end);
+    this.el.addEventListener('pointercancel', end);
+  }
+}
+
+// ── Запуск ──────────────────────────────────────────────────────────────────
+const roomId = new URLSearchParams(location.search).get('room');
+if (!roomId) location.href = 'index.html';
+
+const client = new PadClient(roomId);
+const controls = [...BUTTONS.map(n => new Button(n, client)), new Dpad(client)];
+controls.forEach(c => c.place());
+
+let editing = false;
+$('modeBtn').onclick = () => {
+  editing = !editing;
+  $('modeBtn').textContent = editing ? 'Play' : 'Edit';
+  $('modeBtn').classList.toggle('editing', editing);
+  controls.forEach(c => c.setEditing(editing));
+};
+</script>
+</body>
+</html>

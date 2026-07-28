@@ -1,0 +1,164 @@
+<!-- WTFPL Kimi K3 -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sega Genesis — Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{color-scheme:dark} *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0d0f14;color:#e6e8ee;
+       min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+  h1{font-size:20px;font-weight:600;margin:10px 0 20px;color:#7dd3fc}
+  .panel{background:#161a22;border:1px solid #262b36;border-radius:12px;padding:16px 20px;
+         margin-bottom:16px;width:100%;max-width:900px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .item{background:#10131a;border-radius:8px;padding:10px 12px}
+  .label{font-size:11px;text-transform:uppercase;color:#7a8296;letter-spacing:.05em}
+  .value{font-size:18px;font-weight:600;margin-top:4px;word-break:break-all}
+  .ok{color:#4ade80} .bad{color:#f87171}
+  #chooseBtn{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;
+             border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+  #fileInput{display:none}
+  #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
+            overflow:hidden;border:1px solid #262b36;display:none}
+  #game{width:100%;height:100%}
+  #qrcode{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
+  #qrcode img{display:block}
+</style>
+</head>
+<body>
+<h1>Sega Mega Drive / Genesis — Monitor</h1>
+
+<div class="panel">
+  <span class="label">Комната:</span> <b id="roomId"></b>
+  <div id="qrcode"></div>
+  <div id="gpUrl" style="font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all"></div>
+</div>
+
+<div class="panel grid">
+  <div class="item"><div class="label">Gamepad 1</div><div class="value bad" id="gp1">Disconnected</div></div>
+  <div class="item"><div class="label">Gamepad 2</div><div class="value bad" id="gp2">Disconnected</div></div>
+  <div class="item"><div class="label">FPS</div><div class="value" id="fps">-</div></div>
+  <div class="item"><div class="label">ROM</div><div class="value" id="rom">Загрузка…</div></div>
+</div>
+
+<div class="panel"><button id="chooseBtn">Выбрать ROM вручную</button><input type="file" id="fileInput" accept=".zip,.bin,.gen,.md,.smd"></div>
+<div id="gameWrap"><div id="game"></div></div>
+
+<script type="module">
+import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
+
+const APP_ID = 'sega-md-p2p-v1';
+const ROM_URL = 'https://www.emu-land.net/consoles/genesis/roms?act=getmfl&id=23905&fid=7849';
+const PROXIES = [u => u,
+                 u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+                 u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)];
+const $ = id => document.getElementById(id);
+
+// ── Ввод от геймпадов → эмулятор ────────────────────────────────────────────
+class InputAdapter {
+  static MAP = {UP:4, DOWN:5, LEFT:6, RIGHT:7, A:8, B:0, C:9, X:10, Y:1, Z:11, START:3, MODE:2};
+
+  apply(msg, port) {
+    const gm = window.EJS_emulator?.gameManager;
+    if (!gm?.simulateInput) return;
+    const send = (name, v) => gm.simulateInput(port, InputAdapter.MAP[name], v);
+    if (msg.type === 'button') send(msg.button, msg.pressed ? 1 : 0);
+    else if (msg.type === 'dpad') {
+      send('LEFT', msg.x < 0); send('RIGHT', msg.x > 0);
+      send('UP', msg.y < 0);   send('DOWN', msg.y > 0);
+    }
+  }
+}
+
+// ── P2P-хост комнаты: выдаёт слоты Player 1/2, принимает ввод ──────────────
+class GameHost {
+  constructor(roomId, ui) {
+    this.ui = ui;
+    this.slots = new Map();                       // peerId -> 1|2
+    this.adapter = new InputAdapter();
+    const room = joinRoom({appId: APP_ID}, roomId);
+    [this.sendAssign] = room.makeAction('assign');
+    const [, getInput] = room.makeAction('input');
+    getInput((msg, peer) => {
+      const player = this.slots.get(peer);
+      if (player) this.adapter.apply(msg, player - 1);
+    });
+    room.onPeerJoin(peer => {
+      const free = [1, 2].find(n => ![...this.slots.values()].includes(n));
+      if (!free) return;
+      this.slots.set(peer, free);
+      this.sendAssign({player: free}, peer);
+      this.ui.showSlots(this.slots);
+    });
+    room.onPeerLeave(peer => { this.slots.delete(peer); this.ui.showSlots(this.slots); });
+  }
+}
+
+// ── UI монитора ─────────────────────────────────────────────────────────────
+class MonitorUI {
+  showSlots(slots) {
+    for (const n of [1, 2]) {
+      const on = [...slots.values()].includes(n);
+      const el = $('gp' + n);
+      el.textContent = on ? 'Connected' : 'Disconnected';
+      el.className = 'value ' + (on ? 'ok' : 'bad');
+    }
+  }
+  showQr(roomId) {
+    $('roomId').textContent = roomId;
+    const url = new URL('gamepad.html', location.href);
+    url.search = '?room=' + roomId;
+    $('gpUrl').textContent = url.href;
+    new QRCode($('qrcode'), {text: url.href, width: 180, height: 180});
+  }
+  startEmulator(url, name) {
+    $('gameWrap').style.display = 'block';
+    $('rom').textContent = name;
+    Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
+      EJS_gameName: name, EJS_startOnLoaded: true,
+      EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
+    document.getElementById('ejs-loader')?.remove();
+    const s = document.createElement('script');
+    s.id = 'ejs-loader';
+    s.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+    document.body.appendChild(s);
+    setInterval(() => {
+      const fps = window.EJS_emulator?.gameManager?.getFPS?.();
+      if (fps != null) $('fps').textContent = Math.round(fps);
+    }, 1000);
+  }
+  async autoLoadRom() {
+    for (const wrap of PROXIES) {
+      try {
+        const r = await fetch(wrap(ROM_URL));
+        if (!r.ok) throw 0;
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength < 1024) throw 0;
+        return this.startEmulator(URL.createObjectURL(new Blob([buf])), 'Auto ROM');
+      } catch { /* следующий прокси */ }
+    }
+    $('rom').textContent = 'Ошибка — выберите файл';
+  }
+}
+
+// ── Запуск ──────────────────────────────────────────────────────────────────
+const ui = new MonitorUI();
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room') || Math.random().toString(36).slice(2, 8);
+if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
+
+ui.showQr(roomId);
+new GameHost(roomId, ui);
+ui.autoLoadRom();
+
+$('chooseBtn').onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => {
+  const f = e.target.files[0];
+  if (f) ui.startEmulator(URL.createObjectURL(f), f.name);
+};
+</script>
+</body>
+</html>

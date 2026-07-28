@@ -1,0 +1,67 @@
+<!-- WTFPL Kimi K3 -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sega Genesis P2P</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif;
+    background:#0d0f14; color:#e6e8ee; min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; padding:20px;
+  }
+  h1 { font-size:22px; font-weight:600; color:#7dd3fc; margin:0 0 8px; }
+  .card {
+    background:#161a22; border:1px solid #262b36; border-radius:12px;
+    padding:20px 24px; width:100%; max-width:420px;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .card h2 { font-size:14px; font-weight:600; margin:0; color:#9aa3b5; text-transform:uppercase; letter-spacing:.05em; }
+  a.btn, button.btn {
+    background:linear-gradient(180deg,#3b82f6,#2563eb); color:#fff; border:none;
+    padding:14px 28px; border-radius:10px; font-size:16px; font-weight:600;
+    cursor:pointer; text-decoration:none; text-align:center;
+    box-shadow:0 4px 14px rgba(59,130,246,.35);
+  }
+  a.btn:hover, button.btn:hover { filter:brightness(1.08); }
+  input {
+    background:#10131a; border:1px solid #262b36; border-radius:8px;
+    color:#e6e8ee; padding:12px 14px; font-size:16px; text-transform:uppercase;
+    letter-spacing:.1em; outline:none; width:100%;
+  }
+  input:focus { border-color:#3b82f6; }
+  .hint { font-size:12px; color:#7a8296; }
+</style>
+</head>
+<body>
+  <h1>Sega Mega Drive / Genesis — P2P</h1>
+
+  <div class="card">
+    <h2>Компьютер (монитор)</h2>
+    <a class="btn" href="monitor.html">Создать игровую комнату</a>
+    <div class="hint">Откроется эмулятор с QR-кодом для геймпадов.</div>
+  </div>
+
+  <div class="card">
+    <h2>Телефон (геймпад)</h2>
+    <input id="roomCode" maxlength="12" placeholder="Код комнаты" autocomplete="off">
+    <button class="btn" id="joinBtn">Подключиться как геймпад</button>
+    <div class="hint">Код комнаты показан на экране монитора под QR-кодом.</div>
+  </div>
+
+<script>
+  const input = document.getElementById('roomCode');
+  const join = () => {
+    const code = input.value.trim();
+    if (!code) { input.focus(); return; }
+    location.href = 'gamepad.html?room=' + encodeURIComponent(code);
+  };
+  document.getElementById('joinBtn').addEventListener('click', join);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+</script>
+</body>
+</html>
