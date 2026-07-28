@@ -52,9 +52,9 @@ import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
 
 const APP_ID = 'sega-md-p2p-v1';
 const ROM_URL = 'https://www.emu-land.net/consoles/genesis/roms?act=getmfl&id=23905&fid=7849';
-const PROXIES = [u => u,
-                 u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-                 u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)];
+const PROXIES = [u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+                 u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+                 u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)];
 const $ = id => document.getElementById(id);
 
 // ── Ввод от геймпадов → эмулятор ────────────────────────────────────────────
@@ -132,13 +132,14 @@ class MonitorUI {
   }
   async autoLoadRom() {
     for (const wrap of PROXIES) {
+      const url = wrap(ROM_URL);
       try {
-        const r = await fetch(wrap(ROM_URL));
-        if (!r.ok) throw 0;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         const buf = await r.arrayBuffer();
-        if (buf.byteLength < 1024) throw 0;
+        if (buf.byteLength < 1024) throw new Error('too small');
         return this.startEmulator(URL.createObjectURL(new Blob([buf])), 'Auto ROM');
-      } catch { /* следующий прокси */ }
+      } catch (e) { console.warn('[rom] прокси не сработал:', url, e); }
     }
     $('rom').textContent = 'Ошибка — выберите файл';
   }
