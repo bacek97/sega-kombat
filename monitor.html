@@ -80,20 +80,20 @@ class GameHost {
     this.slots = new Map();                       // peerId -> 1|2
     this.adapter = new InputAdapter();
     const room = joinRoom({appId: APP_ID}, roomId);
-    [this.sendAssign] = room.makeAction('assign');
-    const [, getInput] = room.makeAction('input');
-    getInput((msg, peer) => {
-      const player = this.slots.get(peer);
+    const assign = room.makeAction('assign');
+    const input = room.makeAction('input');
+    input.onMessage = (msg, {peerId}) => {
+      const player = this.slots.get(peerId);
       if (player) this.adapter.apply(msg, player - 1);
-    });
-    room.onPeerJoin(peer => {
+    };
+    room.onPeerJoin = peer => {
       const free = [1, 2].find(n => ![...this.slots.values()].includes(n));
       if (!free) return;
       this.slots.set(peer, free);
-      this.sendAssign({player: free}, peer);
+      assign.send({player: free}, {target: peer});
       this.ui.showSlots(this.slots);
-    });
-    room.onPeerLeave(peer => { this.slots.delete(peer); this.ui.showSlots(this.slots); });
+    };
+    room.onPeerLeave = peer => { this.slots.delete(peer); this.ui.showSlots(this.slots); };
   }
 }
 

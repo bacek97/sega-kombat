@@ -43,23 +43,24 @@ class PadClient {
   constructor(roomId) {
     this.player = 0;
     const room = joinRoom({appId: APP_ID}, roomId);
-    [this.send] = room.makeAction('input');
-    const [, getAssign] = room.makeAction('assign');
-    getAssign(d => {
+    const input = room.makeAction('input');
+    this.sendAction = input;
+    const assign = room.makeAction('assign');
+    assign.onMessage = d => {
       this.player = d.player;
       $('player').textContent = 'Player ' + d.player;
       $('conn').textContent = 'Connected';
       $('conn').className = 'ok';
-    });
-    room.onPeerJoin(() => { $('conn').textContent = 'Connected'; $('conn').className = 'ok'; });
-    room.onPeerLeave(() => {
+    };
+    room.onPeerJoin = () => { $('conn').textContent = 'Connected'; $('conn').className = 'ok'; };
+    room.onPeerLeave = () => {
       this.player = 0;
       $('conn').textContent = 'Disconnected';
       $('conn').className = 'bad';
       $('player').textContent = '';
-    });
+    };
   }
-  emit(obj) { if (this.player) this.send(obj); }
+  emit(obj) { if (this.player) this.sendAction.send(obj); }
 }
 
 // ── SVG-фабрики ─────────────────────────────────────────────────────────────
