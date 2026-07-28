@@ -56,6 +56,37 @@ import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
 
 const APP_ID = 'sega-md-p2p-v1';
 const ROM_URL = 'https://www.emu-land.net/consoles/genesis/roms?act=getmfl&id=23905&fid=7849';
+const ROM_NAME = 'Ultimate Mortal Kombat 3 (U) [T+Rus Pirate].zip';
+const PROXIES = [u => 'https://api.cors.lol/?url=' + encodeURIComponent(u),
+                 u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)];
+
+// ── Кэш ROM в IndexedDB ─────────────────────────────────────────────────────
+class RomCache {
+  static open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('sega-roms', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('roms');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  static async get() {
+    try {
+      const db = await RomCache.open();
+      return await new Promise(res => {
+        const q = db.transaction('roms').objectStore('roms').get('auto');
+        q.onsuccess = () => res(q.result || null);
+        q.onerror = () => res(null);
+      });
+    } catch { return null; }
+  }
+  static async set(blob) {
+    try {
+      const db = await RomCache.open();
+      db.transaction('roms', 'readwrite').objectStore('roms').put(blob, 'auto');
+    } catch { /* квота/приватный режим — не критично */ }
+  }
+}
 const $ = id => document.getElementById(id);
 
 // ── Ввод от геймпадов → эмулятор ────────────────────────────────────────────
@@ -132,8 +163,28 @@ class MonitorUI {
     }, 1000);
   }
   showRomHint() {
-    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener">Скачать ROM</a><br>
+    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener" referrerpolicy="no-referrer">Скачать ROM</a><br>
       <span style="font-size:12px;color:#7a8296">перетащите файл на страницу или нажмите кнопку ниже</span>`;
+  }
+  async loadRomFile(blob, name) {
+    RomCache.set(blob);
+    this.startEmulator(URL.createObjectURL(blob), name);
+  }
+  async autoLoadRom() {
+    const cached = await RomCache.get();
+    if (cached) return this.startEmulator(URL.createObjectURL(cached), ROM_NAME);
+    $('rom').textContent = 'Автозагрузка…';
+    for (const wrap of PROXIES) {
+      const url = wrap(ROM_URL);
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const blob = await r.blob();
+        if (blob.size < 1024) throw new Error('too small');
+        return this.loadRomFile(blob, ROM_NAME);
+      } catch (e) { console.warn('[rom] прокси не сработал:', url, e); }
+    }
+    this.showRomHint();
   }
 }
 
@@ -145,12 +196,12 @@ if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
 
 ui.showQr(roomId);
 new GameHost(roomId, ui);
-ui.showRomHint();
+ui.autoLoadRom();
 
 $('chooseBtn').onclick = () => $('fileInput').click();
 $('fileInput').onchange = e => {
   const f = e.target.files[0];
-  if (f) ui.startEmulator(URL.createObjectURL(f), f.name);
+  if (f) ui.loadRomFile(f, f.name);
 };
 
 // ── Drag & drop ROM на страницу ──────────────────────────────────────────────
@@ -160,7 +211,7 @@ window.addEventListener('drop', e => {
   e.preventDefault();
   document.body.classList.remove('dragover');
   const f = e.dataTransfer.files[0];
-  if (f) ui.startEmulator(URL.createObjectURL(f), f.name);
+  if (f) ui.loadRomFile(f, f.name);
 });
 </script>
 </body>
