@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sega Genesis — Monitor</title>
+<link rel="icon" href="data:,">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{color-scheme:dark} *{box-sizing:border-box}
@@ -57,8 +58,7 @@ import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
 const APP_ID = 'sega-md-p2p-v1';
 const ROM_URL = 'https://www.emu-land.net/consoles/genesis/roms?act=getmfl&id=23905&fid=7849';
 const ROM_NAME = 'Ultimate Mortal Kombat 3 (U) [T+Rus Pirate].zip';
-const PROXIES = [u => 'https://api.cors.lol/?url=' + encodeURIComponent(u),
-                 u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)];
+const PROXIES = [u => 'https://api.cors.lol/?url=' + encodeURIComponent(u)];
 
 // ── Кэш ROM в IndexedDB ─────────────────────────────────────────────────────
 class RomCache {
@@ -163,8 +163,10 @@ class MonitorUI {
     }, 1000);
   }
   showRomHint() {
-    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener" referrerpolicy="no-referrer">Скачать ROM</a><br>
+    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener" referrerpolicy="no-referrer">Скачать ROM</a> ·
+      <a href="#" id="retryLoad">Повторить автозагрузку</a><br>
       <span style="font-size:12px;color:#7a8296">перетащите файл на страницу или нажмите кнопку ниже</span>`;
+    $('retryLoad').onclick = e => { e.preventDefault(); this.autoLoadRom(); };
   }
   async loadRomFile(blob, name) {
     RomCache.set(blob);
