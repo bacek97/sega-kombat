@@ -29,8 +29,10 @@
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
             overflow:hidden;border:1px solid #262b36;display:none}
   #game{width:100%;height:100%}
-  #qrcode{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
-  #qrcode img{display:block}
+  .qrs{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px}
+  .qrbox canvas,.qrbox img{display:block}
+  .qr{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
+  .qrurl{font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all;max-width:280px}
 </style>
 </head>
 <body>
@@ -38,8 +40,10 @@
 
 <div class="panel">
   <span class="label">Комната:</span> <b id="roomId"></b>
-  <div id="qrcode"></div>
-  <div id="gpUrl" style="font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all"></div>
+  <div class="qrs">
+    <div class="qrbox"><div class="label">Gamepad 1</div><div class="qr" id="qr1"></div><div class="qrurl" id="gpUrl1"></div></div>
+    <div class="qrbox"><div class="label">Gamepad 2</div><div class="qr" id="qr2"></div><div class="qrurl" id="gpUrl2"></div></div>
+  </div>
 </div>
 
 <div class="panel grid">
@@ -114,18 +118,24 @@ class GameHost {
     const room = joinRoom({appId: APP_ID}, roomId);
     const assign = room.makeAction('assign');
     const input = room.makeAction('input');
+    const hello = room.makeAction('hello');
     input.onMessage = (msg, {peerId}) => {
       const player = this.slots.get(peerId);
       if (player) this.adapter.apply(msg, player - 1);
     };
-    room.onPeerJoin = peer => {
-      const free = [1, 2].find(n => ![...this.slots.values()].includes(n));
-      if (!free) return;
-      this.slots.set(peer, free);
-      assign.send({player: free}, {target: peer});
+    hello.onMessage = (msg, {peerId}) => {
+      let slot = this.slots.get(peerId);
+      if (!slot) {
+        const taken = [...this.slots.values()];
+        const want = msg && msg.want;
+        slot = (want && !taken.includes(want)) ? want : [1, 2].find(n => !taken.includes(n));
+        if (!slot) { assign.send({player: 0}, {target: peerId}); return; }
+        this.slots.set(peerId, slot);
+      }
+      assign.send({player: slot}, {target: peerId});
       this.ui.showSlots(this.slots);
     };
-    room.onPeerLeave = peer => { this.slots.delete(peer); this.ui.showSlots(this.slots); };
+    room.onPeerLeave = peer => { if (this.slots.delete(peer)) this.ui.showSlots(this.slots); };
   }
 }
 
@@ -141,10 +151,12 @@ class MonitorUI {
   }
   showQr(roomId) {
     $('roomId').textContent = roomId;
-    const url = new URL('gamepad.html', location.href);
-    url.search = '?room=' + roomId;
-    $('gpUrl').textContent = url.href;
-    new QRCode($('qrcode'), {text: url.href, width: 180, height: 180});
+    for (const n of [1, 2]) {
+      const url = new URL('gamepad.html', location.href);
+      url.search = `?room=${roomId}&player=${n}`;
+      $('gpUrl' + n).textContent = url.href;
+      new QRCode($('qr' + n), {text: url.href, width: 160, height: 160});
+    }
   }
   startEmulator(url, name) {
     $('gameWrap').style.display = 'block';
