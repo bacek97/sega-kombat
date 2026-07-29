@@ -212,7 +212,10 @@ class MonitorUI {
     ctx.imageSmoothingEnabled = false;
     frames.forEach((f, i) => {
       const s = sizeOf(f);
-      ctx.drawImage(f.cvs, (i % 2) * tile, Math.floor(i / 2) * tile, s, s);
+      const dx = (i % 2) * tile, dy = Math.floor(i / 2) * tile;
+      ctx.fillStyle = '#fff';                 // подложка: canvas qrcodejs прозрачный в светлых модулях
+      ctx.fillRect(dx, dy, s, s);
+      ctx.drawImage(f.cvs, dx, dy, s, s);
     });
     document.body.style.backgroundImage = `url(${sprite.toDataURL('image/png')})`;
     document.body.classList.add('qrbg');
