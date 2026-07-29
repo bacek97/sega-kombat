@@ -19,6 +19,8 @@
   .label{font-size:11px;text-transform:uppercase;color:#7a8296;letter-spacing:.05em}
   .value{font-size:18px;font-weight:600;margin-top:4px;word-break:break-all}
   .ok{color:#4ade80} .bad{color:#f87171}
+  #swapBtn{background:#262b36;color:#e6e8ee;border:1px solid #3a4152;padding:8px 16px;
+           border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:12px}
   #chooseBtn{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;
              border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
   .panel a{color:#7dd3fc}
@@ -29,10 +31,9 @@
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
             overflow:hidden;border:1px solid #262b36;display:none}
   #game{width:100%;height:100%}
-  .qrs{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px}
-  .qrbox canvas,.qrbox img{display:block}
   .qr{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
-  .qrurl{font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all;max-width:280px}
+  .qr img{display:block;width:180px;height:180px}
+  .qrurl{font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all;max-width:480px}
 </style>
 </head>
 <body>
@@ -40,17 +41,19 @@
 
 <div class="panel">
   <span class="label">Комната:</span> <b id="roomId"></b>
-  <div class="qrs">
-    <div class="qrbox"><div class="label">Gamepad 1</div><div class="qr" id="qr1"></div><div class="qrurl" id="gpUrl1"></div></div>
-    <div class="qrbox"><div class="label">Gamepad 2</div><div class="qr" id="qr2"></div><div class="qrurl" id="gpUrl2"></div></div>
-  </div>
+  <div class="qr" id="qrMain"></div>
+  <div class="qrurl" id="gpUrl"></div>
+  <div class="qrurl">Фиксированные слоты: <a id="link1" href="#" target="_blank" rel="noopener">Player 1</a> · <a id="link2" href="#" target="_blank" rel="noopener">Player 2</a></div>
 </div>
 
-<div class="panel grid">
-  <div class="item"><div class="label">Gamepad 1</div><div class="value bad" id="gp1">Disconnected</div></div>
-  <div class="item"><div class="label">Gamepad 2</div><div class="value bad" id="gp2">Disconnected</div></div>
-  <div class="item"><div class="label">FPS</div><div class="value" id="fps">-</div></div>
-  <div class="item"><div class="label">ROM</div><div class="value" id="rom">Загрузка…</div></div>
+<div class="panel">
+  <div class="grid">
+    <div class="item"><div class="label">Gamepad 1</div><div class="value bad" id="gp1">Disconnected</div></div>
+    <div class="item"><div class="label">Gamepad 2</div><div class="value bad" id="gp2">Disconnected</div></div>
+    <div class="item"><div class="label">FPS</div><div class="value" id="fps">-</div></div>
+    <div class="item"><div class="label">ROM</div><div class="value" id="rom">Загрузка…</div></div>
+  </div>
+  <button id="swapBtn">Swap P1 &#8596; P2</button>
 </div>
 
 <div class="panel"><button id="chooseBtn">Выбрать ROM вручную</button><input type="file" id="fileInput" accept=".zip,.bin,.gen,.md,.smd"></div>
@@ -95,7 +98,7 @@ const $ = id => document.getElementById(id);
 
 // ── Ввод от геймпадов → эмулятор ────────────────────────────────────────────
 class InputAdapter {
-  static MAP = {UP:4, DOWN:5, LEFT:6, RIGHT:7, A:8, B:0, C:9, X:10, Y:1, Z:11, START:3, MODE:2};
+  static MAP = {UP:4, DOWN:5, LEFT:6, RIGHT:7, A:1, B:0, C:8, X:10, Y:9, Z:11, START:3, MODE:2};
 
   apply(msg, port) {
     const gm = window.EJS_emulator?.gameManager;
@@ -117,6 +120,7 @@ class GameHost {
     this.adapter = new InputAdapter();
     const room = joinRoom({appId: APP_ID}, roomId);
     const assign = room.makeAction('assign');
+    this.assignAction = assign;
     const input = room.makeAction('input');
     const hello = room.makeAction('hello');
     input.onMessage = (msg, {peerId}) => {
@@ -137,6 +141,14 @@ class GameHost {
     };
     room.onPeerLeave = peer => { if (this.slots.delete(peer)) this.ui.showSlots(this.slots); };
   }
+  swapSlots() {
+    const p1 = [...this.slots.keys()].find(p => this.slots.get(p) === 1);
+    const p2 = [...this.slots.keys()].find(p => this.slots.get(p) === 2);
+    if (p1) this.slots.set(p1, 2);
+    if (p2) this.slots.set(p2, 1);
+    for (const [peer, slot] of this.slots) this.assignAction.send({player: slot}, {target: peer});
+    this.ui.showSlots(this.slots);
+  }
 }
 
 // ── UI монитора ─────────────────────────────────────────────────────────────
@@ -151,12 +163,29 @@ class MonitorUI {
   }
   showQr(roomId) {
     $('roomId').textContent = roomId;
+    const base = new URL('gamepad.html', location.href);
+    base.search = '?room=' + roomId;
+    $('gpUrl').textContent = base.href;
     for (const n of [1, 2]) {
-      const url = new URL('gamepad.html', location.href);
-      url.search = `?room=${roomId}&player=${n}`;
-      $('gpUrl' + n).textContent = url.href;
-      new QRCode($('qr' + n), {text: url.href, width: 160, height: 160});
+      const u = new URL('gamepad.html', location.href);
+      u.search = `?room=${roomId}&player=${n}`;
+      $('link' + n).href = u.href;
     }
+    // Глич-QR: кадры со всеми уровнями коррекции ошибок, цикл как «помехи»
+    const frames = [QRCode.CorrectLevel.L, QRCode.CorrectLevel.M,
+                    QRCode.CorrectLevel.Q, QRCode.CorrectLevel.H].map(l => {
+      const tmp = document.createElement('div');
+      new QRCode(tmp, {text: base.href, width: 180, height: 180, correctLevel: l});
+      return tmp.querySelector('img').src;
+    });
+    const img = document.createElement('img');
+    $('qrMain').appendChild(img);
+    let i = 0;
+    setInterval(() => {
+      i = (i + 1) % frames.length;
+      img.src = frames[i];
+      img.style.opacity = Math.random() < 0.2 ? 0.85 : 1;
+    }, 250);
   }
   startEmulator(url, name) {
     $('gameWrap').style.display = 'block';
@@ -209,7 +238,8 @@ const roomId = params.get('room') || Math.random().toString(36).slice(2, 8);
 if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
 
 ui.showQr(roomId);
-new GameHost(roomId, ui);
+const host = new GameHost(roomId, ui);
+$('swapBtn').onclick = () => host.swapSlots();
 ui.autoLoadRom();
 
 $('chooseBtn').onclick = () => $('fileInput').click();
