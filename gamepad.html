@@ -300,14 +300,19 @@ async function enterFullscreen() {
     await screen.orientation.lock('landscape').catch(() => {});
   } catch { /* жест не засчитан или API не поддержан */ }
 }
-$('fsBtn').onclick = async () => {
-  if (document.fullscreenElement) await document.exitFullscreen();
-  else await enterFullscreen();
-};
-document.addEventListener('fullscreenchange', () => {
-  $('fsBtn').textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
-});
-window.addEventListener('pointerdown', () => enterFullscreen(), {once: true});
+if (EMBED) {
+  // iframe: fullscreen родительской страницы, иначе игра за iframe не видна
+  $('fsBtn').onclick = () => parent.postMessage({type: 'fs'}, '*');
+} else {
+  $('fsBtn').onclick = async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await enterFullscreen();
+  };
+  document.addEventListener('fullscreenchange', () => {
+    $('fsBtn').textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
+  });
+  window.addEventListener('pointerdown', () => enterFullscreen(), {once: true});
+}
 
 let editing = false;
 $('modeBtn').onclick = () => {

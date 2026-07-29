@@ -34,6 +34,8 @@
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
             overflow:hidden;border:1px solid #262b36;display:none;position:relative}
   .padOverlay{position:absolute;inset:0;width:100%;height:100%;border:0;z-index:5}
+  :fullscreen footer,:fullscreen h1{display:none}
+  :fullscreen #gameWrap{max-width:none;height:100vh;aspect-ratio:auto}
   #game{width:100%;height:100%}
   .qr{display:inline-block;padding:18px;background:#fff;border-radius:8px;margin-top:8px}
   .qr img{display:block;width:180px;height:180px}
@@ -134,6 +136,13 @@ class GameHost {
       else if (e.data.type === 'pad') {
         const player = this.slots.get('local');
         if (player) this.adapter.apply(e.data.msg, player - 1);
+      } else if (e.data.type === 'fs') {
+        // Fullscreen именно родителя: fullscreen внутри iframe скрыл бы игру
+        try {
+          if (document.fullscreenElement) document.exitFullscreen();
+          else document.documentElement.requestFullscreen()
+            .then(() => screen.orientation?.lock('landscape').catch(() => {})).catch(() => {});
+        } catch { /* нет пользовательской активации (file://) — игнор */ }
       }
     });
     const room = joinRoom({appId: APP_ID, relayUrls: RELAYS}, roomId);
@@ -261,6 +270,7 @@ class MonitorUI {
     this.romName = name;
     Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
       EJS_gameName: name, EJS_startOnLoaded: true, EJS_language: 'en-US',
+      EJS_defaultOptions: {'virtual-gamepad': false},        // свой overlay-геймпад вместо встроенного
       EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
     document.getElementById('ejs-loader')?.remove();
     const s = document.createElement('script');
