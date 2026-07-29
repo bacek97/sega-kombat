@@ -9,18 +9,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{color-scheme:dark} *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0d0f14;color:#e6e8ee;
+  html{background:#0d0f14}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#e6e8ee;
        min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
   h1{font-size:20px;font-weight:600;margin:10px 0 20px;color:#7dd3fc}
   .panel{background:#161a22;border:1px solid #262b36;border-radius:12px;padding:16px 20px;
          margin-bottom:16px;width:100%;max-width:900px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-  .item{background:#10131a;border-radius:8px;padding:10px 12px}
   .label{font-size:11px;text-transform:uppercase;color:#7a8296;letter-spacing:.05em}
-  .value{font-size:18px;font-weight:600;margin-top:4px;word-break:break-all}
   .ok{color:#4ade80} .bad{color:#f87171}
-  #swapBtn{background:#262b36;color:#e6e8ee;border:1px solid #3a4152;padding:8px 16px;
-           border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:12px}
+  .btn{display:inline-block;background:#262b36;color:#e6e8ee;border:1px solid #3a4152;padding:8px 16px;
+       border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none}
   #chooseBtn{background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;
              border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
   .panel a{color:#7dd3fc}
@@ -28,37 +26,45 @@
     display:flex;align-items:center;justify-content:center;background:rgba(13,15,20,.85);
     border:3px dashed #3b82f6;border-radius:16px;font-size:20px;color:#7dd3fc;z-index:99;pointer-events:none}
   #fileInput{display:none}
+  footer{margin-top:auto;width:100%;max-width:900px;border-top:1px solid #262b36;padding-top:16px}
+  .foot{display:flex;gap:20px;align-items:flex-start}
+  .foot .qr{margin-top:0;flex:none}
+  .side{flex:1;min-width:0}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
-            overflow:hidden;border:1px solid #262b36;display:none}
+            overflow:hidden;border:1px solid #262b36;display:none;position:relative}
+  .padOverlay{position:absolute;inset:0;width:100%;height:100%;border:0;z-index:5}
   #game{width:100%;height:100%}
-  .qr{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
+  .qr{display:inline-block;padding:18px;background:#fff;border-radius:8px;margin-top:8px}
   .qr img{display:block;width:180px;height:180px}
-  body.qrbg{background-repeat:repeat;animation:qrdrift 45s linear infinite}
   .qrurl{font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all;max-width:480px}
 </style>
 </head>
 <body>
 <h1>Sega Mega Drive / Genesis — Monitor</h1>
 
-<div class="panel">
-  <span class="label">Комната:</span> <b id="roomId"></b>
-  <div class="qr" id="qrMain"></div>
-  <div class="qrurl" id="gpUrl"></div>
-  <div class="qrurl">Фиксированные слоты: <a id="link1" href="#" target="_blank" rel="noopener">Player 1</a> · <a id="link2" href="#" target="_blank" rel="noopener">Player 2</a></div>
-</div>
-
-<div class="panel">
-  <div class="grid">
-    <div class="item"><div class="label">Gamepad 1</div><div class="value bad" id="gp1">Disconnected</div></div>
-    <div class="item"><div class="label">Gamepad 2</div><div class="value bad" id="gp2">Disconnected</div></div>
-    <div class="item"><div class="label">FPS</div><div class="value" id="fps">-</div></div>
-    <div class="item"><div class="label">ROM</div><div class="value" id="rom">Загрузка…</div></div>
-  </div>
-  <button id="swapBtn">Swap P1 &#8596; P2</button>
-</div>
-
-<div class="panel"><button id="chooseBtn">Выбрать ROM вручную</button><input type="file" id="fileInput" accept=".zip,.bin,.gen,.md,.smd"></div>
 <div id="gameWrap"><div id="game"></div></div>
+
+<footer>
+  <div class="panel foot">
+    <div class="qr" id="qrMain"></div>
+    <div class="side">
+      <div class="row">
+        <button id="chooseBtn">Выбрать ROM вручную</button>
+      </div>
+      <div class="qrurl" id="romHint"></div>
+      <div class="row">
+        <button id="swapBtn" class="btn">Swap &#8596;</button>
+        <a id="link1" class="btn bad" href="#" target="_blank" rel="noopener">Player 1</a>
+        <a id="link2" class="btn bad" href="#" target="_blank" rel="noopener">Player 2</a>
+        <button id="saveBtn" class="btn">Save</button>
+        <button id="loadBtn" class="btn">Load</button>
+        <button id="padBtn" class="btn">Геймпад</button>
+      </div>
+      <input type="file" id="fileInput" accept=".zip,.bin,.gen,.md,.smd">
+    </div>
+  </div>
+</footer>
 
 <script type="module">
 import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
@@ -119,8 +125,17 @@ class InputAdapter {
 class GameHost {
   constructor(roomId, ui) {
     this.ui = ui;
-    this.slots = new Map();                       // peerId -> 1|2
+    this.slots = new Map();                       // peerId|'local' -> 1|2
     this.adapter = new InputAdapter();
+    this.localFrame = null;                       // iframe overlay-геймпада
+    window.addEventListener('message', e => {
+      if (!this.localFrame || e.source !== this.localFrame.contentWindow || !e.data) return;
+      if (e.data.type === 'padReady') this.assignLocal();
+      else if (e.data.type === 'pad') {
+        const player = this.slots.get('local');
+        if (player) this.adapter.apply(e.data.msg, player - 1);
+      }
+    });
     const room = joinRoom({appId: APP_ID, relayUrls: RELAYS}, roomId);
     const assign = room.makeAction('assign');
     this.assignAction = assign;
@@ -144,13 +159,59 @@ class GameHost {
     };
     room.onPeerLeave = peer => { if (this.slots.delete(peer)) this.ui.showSlots(this.slots); };
   }
+  // Локальный overlay-геймпад (iframe): слот как у пира, но канал — postMessage
+  assignLocal() {
+    if (!this.localFrame) return;
+    const taken = [...this.slots.values()];
+    const slot = taken.includes(1) ? (taken.includes(2) ? 0 : 2) : 1;
+    if (!slot) { this.detachLocalPad(); return this.ui.flash('padBtn', 'Оба слота заняты'); }
+    this.slots.set('local', slot);
+    this.localFrame.contentWindow.postMessage({type: 'assign', player: slot}, '*');
+    this.ui.showSlots(this.slots);
+  }
+  detachLocalPad() {
+    this.localFrame?.remove();
+    this.localFrame = null;
+    if (this.slots.delete('local')) this.ui.showSlots(this.slots);
+  }
   swapSlots() {
     const p1 = [...this.slots.keys()].find(p => this.slots.get(p) === 1);
     const p2 = [...this.slots.keys()].find(p => this.slots.get(p) === 2);
     if (p1) this.slots.set(p1, 2);
     if (p2) this.slots.set(p2, 1);
-    for (const [peer, slot] of this.slots) this.assignAction.send({player: slot}, {target: peer});
+    for (const [peer, slot] of this.slots) {
+      if (peer === 'local') this.localFrame?.contentWindow.postMessage({type: 'assign', player: slot}, '*');
+      else this.assignAction.send({player: slot}, {target: peer});
+    }
     this.ui.showSlots(this.slots);
+  }
+}
+
+// ── Кэш сохранений состояния в IndexedDB ───────────────────────────────────
+class StateCache {
+  static open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('sega-states', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('states');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  static async set(name, data) {
+    try {
+      const db = await StateCache.open();
+      db.transaction('states', 'readwrite').objectStore('states').put(data, name);
+    } catch { /* квота/приватный режим — не критично */ }
+  }
+  static async get(name) {
+    try {
+      const db = await StateCache.open();
+      return await new Promise(res => {
+        const q = db.transaction('states').objectStore('states').get(name);
+        q.onsuccess = () => res(q.result || null);
+        q.onerror = () => res(null);
+      });
+    } catch { return null; }
   }
 }
 
@@ -159,16 +220,12 @@ class MonitorUI {
   showSlots(slots) {
     for (const n of [1, 2]) {
       const on = [...slots.values()].includes(n);
-      const el = $('gp' + n);
-      el.textContent = on ? 'Connected' : 'Disconnected';
-      el.className = 'value ' + (on ? 'ok' : 'bad');
+      $('link' + n).className = 'btn ' + (on ? 'ok' : 'bad');
     }
   }
   showQr(roomId) {
-    $('roomId').textContent = roomId;
     const base = new URL('gamepad.html', location.href);
     base.search = '?room=' + roomId;
-    $('gpUrl').textContent = base.href;
     for (const n of [1, 2]) {
       const u = new URL('gamepad.html', location.href);
       u.search = `?room=${roomId}&player=${n}`;
@@ -196,37 +253,12 @@ class MonitorUI {
     const img = document.createElement('img');
     img.src = frames[frames.length - 1].cvs.toDataURL('image/png');
     $('qrMain').appendChild(img);
-    // Фон: спрайт 2×2 из разных QR в натуральном размере, промежутки — шум
-    const modulePx = 4;
-    const sizeOf = f => f.modules * modulePx;
-    const tile = Math.max(...frames.map(sizeOf));
-    const sprite = document.createElement('canvas');
-    sprite.width = sprite.height = tile * 2;
-    const ctx = sprite.getContext('2d');
-    ctx.globalAlpha = 0.15;
-    for (let y = 0; y < sprite.height; y += modulePx)
-      for (let x = 0; x < sprite.width; x += modulePx) {
-        ctx.fillStyle = Math.random() < 0.5 ? '#000' : '#fff';
-        ctx.fillRect(x, y, modulePx, modulePx);
-      }
-    ctx.imageSmoothingEnabled = false;
-    frames.forEach((f, i) => {
-      const s = sizeOf(f);
-      const dx = (i % 2) * tile, dy = Math.floor(i / 2) * tile;
-      ctx.fillStyle = '#fff';                 // подложка: canvas qrcodejs прозрачный в светлых модулях
-      ctx.fillRect(dx, dy, s, s);
-      ctx.drawImage(f.cvs, dx, dy, s, s);
-    });
-    document.body.style.backgroundImage = `url(${sprite.toDataURL('image/png')})`;
-    document.body.classList.add('qrbg');
-    const st = document.createElement('style');
-    st.textContent = `@keyframes qrdrift{from{background-position:0 0}
-      to{background-position:-${sprite.width}px ${sprite.height}px}}`;
-    document.head.appendChild(st);
   }
   startEmulator(url, name) {
     $('gameWrap').style.display = 'block';
-    $('rom').textContent = name;
+    $('chooseBtn').textContent = 'ROM: ' + name;
+    $('romHint').innerHTML = '';
+    this.romName = name;
     Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
       EJS_gameName: name, EJS_startOnLoaded: true, EJS_language: 'en-US',
       EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
@@ -235,15 +267,31 @@ class MonitorUI {
     s.id = 'ejs-loader';
     s.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
     document.body.appendChild(s);
-    setInterval(() => {
-      const fps = window.EJS_emulator?.gameManager?.getFPS?.();
-      if (fps != null) $('fps').textContent = Math.round(fps);
-    }, 1000);
+  }
+  flash(btnId, text) {
+    const b = $(btnId), old = b.textContent;
+    b.textContent = text;
+    setTimeout(() => b.textContent = old, 1500);
+  }
+  async saveState() {
+    const gm = window.EJS_emulator?.gameManager;
+    if (!gm?.getState) return this.flash('saveBtn', 'Эмулятор не запущен');
+    const data = await Promise.resolve(gm.getState());
+    await StateCache.set(this.romName, data);
+    this.flash('saveBtn', 'Сохранено');
+  }
+  async loadState() {
+    const gm = window.EJS_emulator?.gameManager;
+    if (!gm?.loadState) return this.flash('loadBtn', 'Эмулятор не запущен');
+    const data = await StateCache.get(this.romName);
+    if (!data) return this.flash('loadBtn', 'Нет сохранения');
+    gm.loadState(data);
+    this.flash('loadBtn', 'Загружено');
   }
   showRomHint() {
-    $('rom').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener" referrerpolicy="no-referrer">Скачать ROM</a> ·
-      <a href="#" id="retryLoad">Повторить автозагрузку</a><br>
-      <span style="font-size:12px;color:#7a8296">перетащите файл на страницу или нажмите кнопку ниже</span>`;
+    $('romHint').innerHTML = `<a href="${ROM_URL}" target="_blank" rel="noopener" referrerpolicy="no-referrer">Скачать ROM</a> ·
+      <a href="#" id="retryLoad">Повторить автозагрузку</a> ·
+      перетащите файл на страницу или нажмите кнопку выше`;
     $('retryLoad').onclick = e => { e.preventDefault(); this.autoLoadRom(); };
   }
   async loadRomFile(blob, name) {
@@ -253,7 +301,7 @@ class MonitorUI {
   async autoLoadRom() {
     const cached = await RomCache.get();
     if (cached) return this.startEmulator(URL.createObjectURL(cached), ROM_NAME);
-    $('rom').textContent = 'Автозагрузка…';
+    $('chooseBtn').textContent = 'Автозагрузка ROM…';
     for (const wrap of PROXIES) {
       const url = wrap(ROM_URL);
       try {
@@ -276,6 +324,20 @@ if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
 
 const host = new GameHost(roomId, ui);
 $('swapBtn').onclick = () => host.swapSlots();
+$('saveBtn').onclick = () => ui.saveState();
+$('loadBtn').onclick = () => ui.loadState();
+$('padBtn').onclick = () => {
+  if (host.localFrame) return host.detachLocalPad();       // повторный клик — скрыть
+  if ($('gameWrap').style.display !== 'block') return ui.flash('padBtn', 'Сначала загрузите ROM');
+  const f = document.createElement('iframe');
+  f.id = 'padOverlay';
+  f.className = 'padOverlay';
+  const u = new URL('gamepad.html', location.href);        // тот же геймпад, ввод напрямую
+  u.search = `?room=${roomId}&player=1&embed=1`;
+  f.src = u.href;
+  $('gameWrap').appendChild(f);
+  host.localFrame = f;                                     // слот выдастся по сигналу padReady
+};
 ui.showQr(roomId);
 ui.autoLoadRom();
 

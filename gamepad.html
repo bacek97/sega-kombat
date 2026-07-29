@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Sega Genesis — Gamepad</title>
 <style>
+  :root{color-scheme:dark}
   html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#e6e8ee;
     font-family:-apple-system,Segoe UI,Roboto,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none}
   #topbar{position:fixed;top:0;left:0;right:0;height:44px;z-index:50;display:flex;align-items:center;
@@ -25,6 +26,7 @@
        font:11px/1.6 ui-monospace,Consolas,monospace;color:#9aa3b5;padding:6px 10px;
        max-height:38vh;overflow-y:auto;pointer-events:none;white-space:pre-wrap;word-break:break-all}
   #log.hidden{display:none}
+  body.embed #log{display:none}
 </style>
 </head>
 <body>
@@ -36,7 +38,16 @@
 <div id="layer"></div>
 
 <script type="module">
-import {joinRoom, getRelaySockets} from 'https://esm.run/@trystero-p2p/torrent';
+// Режим overlay (iframe поверх игры на странице монитора): прозрачный фон, ввод через postMessage
+const params = new URLSearchParams(location.search);
+const EMBED = !!params.get('embed');
+if (EMBED) {
+  document.body.classList.add('embed');
+  document.documentElement.style.background = 'transparent';
+  document.body.style.background = 'transparent';
+}
+// trystero нужен только standalone-геймпаду; в embed ввод идёт напрямую в родительскую страницу
+const {joinRoom, getRelaySockets} = EMBED ? {} : await import('https://esm.run/@trystero-p2p/torrent');
 
 const APP_ID = 'sega-md-p2p-v1';
 const RELAYS = ['wss://tracker.webtorrent.dev', 'wss://tracker.openwebtorrent.com',
@@ -122,6 +133,23 @@ class PadClient {
     this.helloTimer = setInterval(() => { if (!this.player) sayHello(); }, 5000);
   }
   emit(obj) { if (this.player) this.sendAction.send(obj); }
+}
+
+// ── Локальный клиент (embed): ввод напрямую в родительскую страницу ─────────
+class LocalClient {
+  constructor(want) {
+    this.player = want || 1;
+    $('conn').textContent = 'Connected';
+    $('conn').className = 'ok';
+    $('player').textContent = 'Player ' + this.player;
+    window.addEventListener('message', e => {
+      if (e.source !== parent || e.data?.type !== 'assign') return;
+      this.player = e.data.player;
+      $('player').textContent = 'Player ' + this.player;
+    });
+    parent.postMessage({type: 'padReady'}, '*');
+  }
+  emit(obj) { if (this.player) parent.postMessage({type: 'pad', msg: obj}, '*'); }
 }
 
 // ── SVG-фабрики ─────────────────────────────────────────────────────────────
@@ -257,11 +285,11 @@ class Dpad extends Control {
 }
 
 // ── Запуск ──────────────────────────────────────────────────────────────────
-const params = new URLSearchParams(location.search);
 const roomId = params.get('room');
 if (!roomId) location.href = 'index.html';
 
-const client = new PadClient(roomId, parseInt(params.get('player')) || 0);
+const want = parseInt(params.get('player')) || 0;
+const client = EMBED ? new LocalClient(want) : new PadClient(roomId, want);
 const controls = [...BUTTONS.map(n => new Button(n, client)), new Dpad(client)];
 controls.forEach(c => c.place());
 
