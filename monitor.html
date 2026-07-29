@@ -162,7 +162,7 @@ class MonitorUI {
     $('gameWrap').style.display = 'block';
     $('rom').textContent = name;
     Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
-      EJS_gameName: name, EJS_startOnLoaded: true,
+      EJS_gameName: name, EJS_startOnLoaded: true, EJS_language: 'en-US',
       EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
     document.getElementById('ejs-loader')?.remove();
     const s = document.createElement('script');

@@ -20,6 +20,11 @@
   .ctrl svg{width:100%;height:100%;display:block}
   .ctrl.editing-outline{outline:2px dashed rgba(255,255,255,.5);outline-offset:4px;border-radius:16px}
   .ctrl.active svg circle,.ctrl.active svg rect{fill-opacity:.55!important}
+  #status{cursor:pointer}
+  #log{position:fixed;top:44px;left:0;right:0;z-index:40;background:rgba(10,12,18,.92);
+       font:11px/1.6 ui-monospace,Consolas,monospace;color:#9aa3b5;padding:6px 10px;
+       max-height:38vh;overflow-y:auto;pointer-events:none;white-space:pre-wrap;word-break:break-all}
+  #log.hidden{display:none}
 </style>
 </head>
 <body>
@@ -27,10 +32,11 @@
   <div id="status"><span id="conn" class="bad">Connecting…</span><span id="player"></span></div>
   <div id="btns"><button id="fsBtn">Fullscreen</button><button id="modeBtn">Edit</button></div>
 </div>
+<div id="log"></div>
 <div id="layer"></div>
 
 <script type="module">
-import {joinRoom} from 'https://esm.run/@trystero-p2p/torrent';
+import {joinRoom, getRelaySockets} from 'https://esm.run/@trystero-p2p/torrent';
 
 const APP_ID = 'sega-md-p2p-v1';
 const BUTTONS = ['A','B','C','X','Y','Z','START','MODE'];
@@ -39,13 +45,38 @@ const DEFAULT_LAYOUT = {dpad:{x:4,y:50},A:{x:78,y:58},B:{x:87,y:44},C:{x:94,y:28
                         X:{x:58,y:36},Y:{x:67,y:20},Z:{x:76,y:6},START:{x:46,y:4},MODE:{x:30,y:4}};
 const $ = id => document.getElementById(id);
 
+// ── Лог подключения ─────────────────────────────────────────────────────────
+const logEl = $('log');
+function log(...args) {
+  const t = new Date().toLocaleTimeString('ru-RU', {hour12: false});
+  const line = document.createElement('div');
+  line.textContent = `[${t}] ` + args.map(x => typeof x === 'object' ? JSON.stringify(x) : x).join(' ');
+  logEl.appendChild(line);
+  while (logEl.childElementCount > 80) logEl.firstChild.remove();
+  logEl.scrollTop = logEl.scrollHeight;
+}
+$('status').onclick = () => logEl.classList.toggle('hidden');
+
+function watchTrackers() {
+  const NAMES = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+  for (const [url, ws] of Object.entries(getRelaySockets())) {
+    log('tracker', url, '→', NAMES[ws.readyState]);
+    ws.addEventListener('open', () => log('tracker', url, '→ OPEN'));
+    ws.addEventListener('close', () => log('tracker', url, '→ CLOSED'));
+    ws.addEventListener('error', () => log('tracker', url, '→ ERROR'));
+  }
+}
+
 // ── P2P-клиент: подключается к комнате монитора, шлёт ввод ─────────────────
 class PadClient {
   constructor(roomId, want) {
     this.player = 0;
     this.want = want;
     this.host = null;
+    log(`start: room=${roomId} want=${want || 'any'} appId=${APP_ID}`);
     const room = joinRoom({appId: APP_ID}, roomId);
+    this.room = room;
+    watchTrackers();
     const input = room.makeAction('input');
     this.sendAction = input;
     const hello = room.makeAction('hello');
@@ -53,27 +84,40 @@ class PadClient {
     assign.onMessage = (d, {peerId}) => {
       this.host = peerId;
       this.player = d.player;
+      log(`assign ← ${peerId.slice(0, 8)}: player=${d.player}`);
       if (d.player) {
         $('player').textContent = 'Player ' + d.player;
         $('conn').textContent = 'Connected';
         $('conn').className = 'ok';
+        setTimeout(() => logEl.classList.add('hidden'), 4000);
       } else {
         $('conn').textContent = 'Room full';
         $('conn').className = 'bad';
         $('player').textContent = '';
       }
     };
-    const sayHello = () => hello.send({want: this.want});
-    room.onPeerJoin = () => sayHello();
+    const sayHello = () => {
+      const peers = Object.keys(room.getPeers()).length;
+      log(`hello → broadcast want=${this.want || 'any'} (peers: ${peers})`);
+      hello.send({want: this.want});
+    };
+    room.onPeerJoin = peer => {
+      log(`peer joined: ${peer.slice(0, 8)} (peers: ${Object.keys(room.getPeers()).length})`);
+      if (!this.player) $('conn').textContent = 'Waiting for monitor…';
+      sayHello();
+    };
     room.onPeerLeave = peer => {
+      log(`peer left: ${peer.slice(0, 8)}`);
       if (peer !== this.host) return;
       this.host = null;
       this.player = 0;
+      logEl.classList.remove('hidden');
       $('conn').textContent = 'Disconnected';
       $('conn').className = 'bad';
       $('player').textContent = '';
     };
     sayHello();
+    this.helloTimer = setInterval(() => { if (!this.player) sayHello(); }, 5000);
   }
   emit(obj) { if (this.player) this.sendAction.send(obj); }
 }
