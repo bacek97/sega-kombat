@@ -196,19 +196,23 @@ class MonitorUI {
     const img = document.createElement('img');
     img.src = frames[frames.length - 1].cvs.toDataURL('image/png');
     $('qrMain').appendChild(img);
-    // Фон: спрайт 2×2 из разных QR с одинаковым размером модулей
+    // Фон: спрайт 2×2 из разных QR в натуральном размере, промежутки — шум
     const modulePx = 4;
-    const sizeOf = f => (f.modules + 8) * modulePx;   // +8 = тихая зона qrcodejs
+    const sizeOf = f => f.modules * modulePx;
     const tile = Math.max(...frames.map(sizeOf));
     const sprite = document.createElement('canvas');
     sprite.width = sprite.height = tile * 2;
     const ctx = sprite.getContext('2d');
     ctx.globalAlpha = 0.15;
+    for (let y = 0; y < sprite.height; y += modulePx)
+      for (let x = 0; x < sprite.width; x += modulePx) {
+        ctx.fillStyle = Math.random() < 0.5 ? '#000' : '#fff';
+        ctx.fillRect(x, y, modulePx, modulePx);
+      }
     ctx.imageSmoothingEnabled = false;
     frames.forEach((f, i) => {
       const s = sizeOf(f);
-      ctx.drawImage(f.cvs, (i % 2) * tile + (tile - s) / 2,
-                    Math.floor(i / 2) * tile + (tile - s) / 2, s, s);
+      ctx.drawImage(f.cvs, (i % 2) * tile, Math.floor(i / 2) * tile, s, s);
     });
     document.body.style.backgroundImage = `url(${sprite.toDataURL('image/png')})`;
     document.body.classList.add('qrbg');
