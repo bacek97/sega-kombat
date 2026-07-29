@@ -34,7 +34,7 @@
   #gameWrap{width:100%;max-width:900px;aspect-ratio:16/9;background:#000;border-radius:12px;
             overflow:hidden;border:1px solid #262b36;display:none;position:relative}
   .padOverlay{position:absolute;inset:0;width:100%;height:100%;border:0;z-index:5}
-  [id^="ejs_virtualGamepad"],.ejs_virtual_gamepad{display:none!important}  /* встроенный геймпад EJS: свой overlay */
+  .ejs_virtualGamepad_parent{display:none!important}  /* контейнер встроенного геймпада EJS (emulator.js:3982) */
   :fullscreen footer,:fullscreen h1{display:none}
   :fullscreen #gameWrap{max-width:none;height:100vh;aspect-ratio:auto}
   #game{width:100%;height:100%}
@@ -272,6 +272,7 @@ class MonitorUI {
     Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
       EJS_gameName: name, EJS_startOnLoaded: true, EJS_language: 'en-US',
       EJS_Buttons: {gamepad: false},                         // кнопка виртуального геймпада EJS не нужна
+      EJS_defaultOptions: {'virtual-gamepad': 'disabled'},   // значения 'enabled'/'disabled' (emulator.js:5625)
       EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
     document.getElementById('ejs-loader')?.remove();
     const s = document.createElement('script');
