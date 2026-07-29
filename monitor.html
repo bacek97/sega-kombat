@@ -172,13 +172,27 @@ class MonitorUI {
       $('link' + n).href = u.href;
     }
     // Глич-QR: кадры со всеми уровнями коррекции ошибок, цикл как «помехи»
-    const frames = [QRCode.CorrectLevel.L, QRCode.CorrectLevel.M,
-                    QRCode.CorrectLevel.Q, QRCode.CorrectLevel.H].map(l => {
-      const tmp = document.createElement('div');
-      new QRCode(tmp, {text: base.href, width: 180, height: 180, correctLevel: l});
-      return tmp.querySelector('img').src;
-    });
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
+    document.body.appendChild(holder);
+    const frames = [];
+    for (const l of [QRCode.CorrectLevel.L, QRCode.CorrectLevel.M,
+                     QRCode.CorrectLevel.Q, QRCode.CorrectLevel.H]) {
+      try {
+        const tmp = document.createElement('div');
+        holder.appendChild(tmp);
+        new QRCode(tmp, {text: base.href, width: 180, height: 180, correctLevel: l});
+        const cvs = tmp.querySelector('canvas');
+        const im = tmp.querySelector('img');
+        const src = (im && im.src && im.src.startsWith('data:')) ? im.src
+                  : cvs ? cvs.toDataURL('image/png') : null;
+        if (src) frames.push(src);
+      } catch (e) { console.warn('[qr] уровень не сгенерирован:', l, e); }
+    }
+    holder.remove();
+    if (!frames.length) return;
     const img = document.createElement('img');
+    img.src = frames[0];
     $('qrMain').appendChild(img);
     let i = 0;
     setInterval(() => {
@@ -237,9 +251,9 @@ const params = new URLSearchParams(location.search);
 const roomId = params.get('room') || Math.random().toString(36).slice(2, 8);
 if (!params.get('room')) history.replaceState(null, '', '?room=' + roomId);
 
-ui.showQr(roomId);
 const host = new GameHost(roomId, ui);
 $('swapBtn').onclick = () => host.swapSlots();
+ui.showQr(roomId);
 ui.autoLoadRom();
 
 $('chooseBtn').onclick = () => $('fileInput').click();
