@@ -33,6 +33,7 @@
   #game{width:100%;height:100%}
   .qr{display:inline-block;padding:8px;background:#fff;border-radius:8px;margin-top:8px}
   .qr img{display:block;width:180px;height:180px}
+  body.qrbg{background-repeat:repeat;animation:qrdrift 45s linear infinite}
   .qrurl{font-size:12px;color:#7a8296;margin-top:8px;word-break:break-all;max-width:480px}
 </style>
 </head>
@@ -173,7 +174,7 @@ class MonitorUI {
       u.search = `?room=${roomId}&player=${n}`;
       $('link' + n).href = u.href;
     }
-    // Глич-QR: кадры со всеми уровнями коррекции ошибок, цикл как «помехи»
+    // Кадры со всеми уровнями коррекции ошибок
     const holder = document.createElement('div');
     holder.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
     document.body.appendChild(holder);
@@ -183,30 +184,38 @@ class MonitorUI {
       try {
         const tmp = document.createElement('div');
         holder.appendChild(tmp);
-        new QRCode(tmp, {text: base.href, width: 180, height: 180, correctLevel: l});
+        const q = new QRCode(tmp, {text: base.href, width: 500, height: 500, correctLevel: l});
         const cvs = tmp.querySelector('canvas');
-        const im = tmp.querySelector('img');
-        const src = (im && im.src && im.src.startsWith('data:')) ? im.src
-                  : cvs ? cvs.toDataURL('image/png') : null;
-        if (src) frames.push(src);
+        const modules = q._oQRCode ? q._oQRCode.getModuleCount() : 33;
+        if (cvs) frames.push({cvs, modules});
       } catch (e) { console.warn('[qr] уровень не сгенерирован:', l, e); }
     }
     holder.remove();
     if (!frames.length) return;
+    // Главный QR — статичный, уровень H читается лучше всего
     const img = document.createElement('img');
-    img.src = frames[0];
+    img.src = frames[frames.length - 1].cvs.toDataURL('image/png');
     $('qrMain').appendChild(img);
-    // 4 уровня × 4 поворота (0/90/180/270°) = 16 кадров, случайный порядок + дребезг
-    const tick = () => {
-      img.src = frames[Math.floor(Math.random() * frames.length)];
-      const rot = 90 * Math.floor(Math.random() * 4);
-      const dx = Math.floor(Math.random() * 5) - 2;
-      const dy = Math.floor(Math.random() * 5) - 2;
-      img.style.transform = `translate(${dx}px,${dy}px) rotate(${rot}deg)`;
-      img.style.opacity = Math.random() < 0.2 ? 0.85 : 1;
-      setTimeout(tick, 150 + Math.random() * 200);
-    };
-    setTimeout(tick, 250);
+    // Фон: спрайт 2×2 из разных QR с одинаковым размером модулей
+    const modulePx = 4;
+    const sizeOf = f => (f.modules + 8) * modulePx;   // +8 = тихая зона qrcodejs
+    const tile = Math.max(...frames.map(sizeOf));
+    const sprite = document.createElement('canvas');
+    sprite.width = sprite.height = tile * 2;
+    const ctx = sprite.getContext('2d');
+    ctx.globalAlpha = 0.15;
+    ctx.imageSmoothingEnabled = false;
+    frames.forEach((f, i) => {
+      const s = sizeOf(f);
+      ctx.drawImage(f.cvs, (i % 2) * tile + (tile - s) / 2,
+                    Math.floor(i / 2) * tile + (tile - s) / 2, s, s);
+    });
+    document.body.style.backgroundImage = `url(${sprite.toDataURL('image/png')})`;
+    document.body.classList.add('qrbg');
+    const st = document.createElement('style');
+    st.textContent = `@keyframes qrdrift{from{background-position:0 0}
+      to{background-position:-${sprite.width}px ${sprite.height}px}}`;
+    document.head.appendChild(st);
   }
   startEmulator(url, name) {
     $('gameWrap').style.display = 'block';
