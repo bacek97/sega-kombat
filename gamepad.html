@@ -39,6 +39,8 @@
 import {joinRoom, getRelaySockets} from 'https://esm.run/@trystero-p2p/torrent';
 
 const APP_ID = 'sega-md-p2p-v1';
+const RELAYS = ['wss://tracker.webtorrent.dev', 'wss://tracker.openwebtorrent.com',
+                'wss://tracker.files.fm:7073/announce', 'wss://tracker.btorrent.xyz'];
 const BUTTONS = ['A','B','C','X','Y','Z','START','MODE'];
 const COLORS = {A:'#f87171',B:'#fbbf24',C:'#4ade80',X:'#60a5fa',Y:'#a78bfa',Z:'#f472b6',START:'#94a3b8',MODE:'#94a3b8'};
 const DEFAULT_LAYOUT = {dpad:{x:4,y:50},A:{x:78,y:58},B:{x:87,y:44},C:{x:94,y:28},
@@ -74,7 +76,7 @@ class PadClient {
     this.want = want;
     this.host = null;
     log(`start: room=${roomId} want=${want || 'any'} appId=${APP_ID}`);
-    const room = joinRoom({appId: APP_ID}, roomId);
+    const room = joinRoom({appId: APP_ID, relayUrls: RELAYS}, roomId);
     this.room = room;
     watchTrackers();
     const input = room.makeAction('input');
