@@ -272,7 +272,11 @@ class MonitorUI {
     Object.assign(window, {EJS_player: '#game', EJS_core: 'segaMD', EJS_gameUrl: url,
       EJS_gameName: name, EJS_startOnLoaded: true, EJS_language: 'en-US',
       EJS_Buttons: {gamepad: false},                         // кнопка виртуального геймпада EJS не нужна
-      EJS_defaultOptions: {'virtual-gamepad': 'disabled'},   // значения 'enabled'/'disabled' (emulator.js:5625)
+      EJS_threads: (typeof SharedArrayBuffer === 'function'), // многопоточное ядро, если доступен SAB (нужны COOP/COEP заголовки)
+      EJS_defaultOptions: {
+        'virtual-gamepad': 'disabled',                        // значения 'enabled'/'disabled' (emulator.js:5625)
+        'webgl2Enabled': 'enabled',                           // GPU-рендеринг через WebGL2 вместо WebGL1 (emulator.js:5387)
+      },
       EJS_pathtodata: 'https://cdn.emulatorjs.org/stable/data/'});
     document.getElementById('ejs-loader')?.remove();
     const s = document.createElement('script');
