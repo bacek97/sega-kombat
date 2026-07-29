@@ -194,12 +194,17 @@ class MonitorUI {
     const img = document.createElement('img');
     img.src = frames[0];
     $('qrMain').appendChild(img);
-    let i = 0;
-    setInterval(() => {
-      i = (i + 1) % frames.length;
-      img.src = frames[i];
+    // 4 уровня × 4 поворота (0/90/180/270°) = 16 кадров, случайный порядок + дребезг
+    const tick = () => {
+      img.src = frames[Math.floor(Math.random() * frames.length)];
+      const rot = 90 * Math.floor(Math.random() * 4);
+      const dx = Math.floor(Math.random() * 5) - 2;
+      const dy = Math.floor(Math.random() * 5) - 2;
+      img.style.transform = `translate(${dx}px,${dy}px) rotate(${rot}deg)`;
       img.style.opacity = Math.random() < 0.2 ? 0.85 : 1;
-    }, 250);
+      setTimeout(tick, 150 + Math.random() * 200);
+    };
+    setTimeout(tick, 250);
   }
   startEmulator(url, name) {
     $('gameWrap').style.display = 'block';
